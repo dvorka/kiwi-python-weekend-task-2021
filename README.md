@@ -52,11 +52,12 @@ Examples:
 - **return trips**: 
     - task assignment explicitly states that **layover** constraint (1h - 6h) **must not** be 
       used between "there trip" (arrival stop) and "back trip" (departure stop)
-    - therefore "there trip" arrival time might be **after** "back trip" departure time
-      i.e. **traveller would miss** "back trip" departure in the reality
+    - therefore "there trip" arrival time might be **AFTER** "back trip" departure time
+      i.e. **traveller would miss** "back trip" departure
     - **please** set option below in `solution.py` to `True` to enable 
-      `"there trip" arrival time` < `"back trip" departure time` constraint:
-        - `solution.py::OPT_TIME_ORDERED_RETURN_TRIP = False`
+      `"there trip" arrival time` < `"back trip" departure time` constraint (ordering
+      of there and back trips does not have to be ordered by default):
+        - `solution.py::OPT_TIME_ORDERED_RETURN_TRIP = True`
 - **result serialization**
    - `travel_time` **longer** than 1 day is serialized using Python's `timedelta` format,
    for instance:

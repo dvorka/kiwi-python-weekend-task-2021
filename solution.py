@@ -466,7 +466,7 @@ def main() -> FlightSearchResult:
         "--max_stops",
         type=int,
         default=0,
-        help="optional maximum number of stops (one way)",
+        help="optional maximum number of stops",
     )
     parser.add_argument(
         "--max_price",
