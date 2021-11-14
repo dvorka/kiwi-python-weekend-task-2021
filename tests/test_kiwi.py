@@ -1,42 +1,28 @@
 # Kiwi.com Python weekend task '21: Martin Dvorak <martin.dvorak@mindforger.com>
 #
-# Tests
+# Tests:
 #
-from typing import List
-from typing import Tuple
-
+#   pytest tests/test_kiwi.py
+#   pytest -s -vvv tests/test_kiwi.py::test_query
+#
 import pytest
 
-from solution import oracle
-
-
-# test utils
-
-
-def gather_results_list(result: oracle.FlightSearchResult) -> Tuple[List, List]:
-    prices: List = []
-    times: List = []
-    if result:
-        for trip in result.trips:
-            prices.append(trip.total_price)
-            times.append(trip.travel_time)
-    return prices, times
-
-
-# tests
+import solution
 
 
 def test_negative_invalid_dataset_path():
-    raise NotImplementedError
+    with pytest.raises(FileNotFoundError):
+        solution.FlightDataset("INVALID PATH").load()
 
 
 def test_negative_invalid_src_dst():
-    raise NotImplementedError
+    with pytest.raises(ValueError):
+        dataset = solution.FlightDataset("datasets/exampleA.csv").load()
+        dataset.validate(solution.FlightQuery(origin="INVALID", destination="WIW"))
 
-
-def test_query_load():
-    # augment
-    raise NotImplementedError
+    with pytest.raises(ValueError):
+        dataset = solution.FlightDataset("datasets/exampleA.csv").load()
+        dataset.validate(solution.FlightQuery(origin="WIW", destination="INVALID"))
 
 
 TASK_SERIALIZATION_EXAMPLE = """[
@@ -96,20 +82,23 @@ TASK_SERIALIZATION_EXAMPLE = """[
 def test_result_serialization():
     # GIVEN
     expected_output = TASK_SERIALIZATION_EXAMPLE
-    flight_oracle = oracle.FlightOracle(
-        oracle.FlightDataset("datasets/exampleSerialization.csv").load()
-    )
     origin = "BTW"
     destination = "REJ"
     bags = 1
-
-    # WHEN
-    result: oracle.FlightSearchResult = flight_oracle.find_flights(
+    return_ticket = False
+    query = solution.FlightQuery(
         origin=origin,
         destination=destination,
-        bags=bags,
-        return_ticket=False,
+        bags_count=bags,
+        return_ticket=return_ticket,
     )
+    query.validate()
+    flight_oracle = solution.FlightOracle(
+        solution.FlightDataset("datasets/exampleSerialization.csv").load()
+    )
+
+    # WHEN
+    result: solution.FlightSearchResult = flight_oracle.find_flights(query)
 
     # THEN
     print(result.to_json())
@@ -124,74 +113,83 @@ def test_result_serialization():
         "expected_first_duration,expected_last_duration"
     ),
     [
-        # # direct flight
-        # (
-        #     "datasets/exampleA.csv",
-        #     "WIW",
-        #     "ECV",
-        #     1,
-        #     False,
-        #     1,
-        #     [245.0 + 12.0],
-        #     ["5:10:00"],
-        # ),
-        # # one flights: direct (1 hop has SHORT overlay)
-        # ("datasets/exampleA.csv", "WIW", "RFZ", 1, False, 1, [123.0], ["5:00:00"]),
-        # # dataset 0: one way THERE
-        # (
-        #     "datasets/example0.csv",
-        #     "WIW",
-        #     "RFZ",
-        #     1,
-        #     False,
-        #     3,
-        #     [180.0, 180.0, 180.0],
-        #     ["4:30:00", "4:30:00", "4:30:00"],
-        # ),
-        # # dataset 0: one way BACK
-        # (
-        #         "datasets/example0.csv",
-        #         "RFZ",
-        #         "WIW",
-        #         1,
-        #         False,
-        #         3,
-        #         [180.0, 180.0, 180.0],
-        #         ["4:30:00", "4:30:00", "4:30:00"],
-        # ),
-        # # dataset 0: return
-        # (
-        #     "datasets/example0.csv",
-        #     "WIW",
-        #     "RFZ",
-        #     1,
-        #     True,
-        #     3 * 3,
-        #     [360.0, 360.0, 360.0, 360.0, 360.0, 360.0, 360.0, 360.0, 360.0],
-        #     [
-        #         "4:30:00",
-        #         "4:30:00",
-        #         "4:30:00",
-        #         "4:30:00",
-        #         "4:30:00",
-        #         "4:30:00",
-        #         "4:30:00",
-        #         "4:30:00",
-        #         "4:30:00",
-        #      ],
-        # ),
+        # direct flight
+        (
+            "datasets/exampleA.csv",
+            "WIW",
+            "ECV",
+            1,
+            False,
+            1,
+            245.0 + 12.0,
+            245.0 + 12.0,
+            "5:10:00",
+            "5:10:00",
+        ),
+        # one flights: direct (1 hop has SHORT overlay)
+        (
+            "datasets/exampleA.csv",
+            "WIW",
+            "RFZ",
+            1,
+            False,
+            1,
+            123.0,
+            123.0,
+            "5:00:00",
+            "5:00:00",
+        ),
+        # dataset 0: one way THERE
+        (
+            "datasets/example0.csv",
+            "WIW",
+            "RFZ",
+            1,
+            False,
+            3,
+            180.0,
+            180.0,
+            "4:30:00",
+            "4:30:00",
+        ),
+        # dataset 0: one way BACK
+        (
+            "datasets/example0.csv",
+            "RFZ",
+            "WIW",
+            1,
+            False,
+            3,
+            180.0,
+            180.0,
+            "4:30:00",
+            "4:30:00",
+        ),
+        # dataset 0: return
+        (
+            "datasets/example0.csv",
+            "WIW",
+            "RFZ",
+            1,
+            True,
+            3 * 3,
+            360.0,
+            360.0,
+            "4:30:00",
+            "4:30:00",
+        ),
         # dataset 3: one way
         (
-                "datasets/example3.csv",
-                "WUE",
-                "NNB",
-                1,
-                False,
-                137,
-                38.0,
-                1146.0,
-                "4:25:00",
-                "1 day, 19:50:00",
+            "datasets/example3.csv",
+            "WUE",
+            "NNB",
+            1,
+            False,
+            137,
+            38.0,
+            1146.0,
+            "4:25:00",
+            "1 day, 19:50:00",
         ),
     ],
 )
@@ -202,23 +200,31 @@ def test_query(
     bags,
     return_ticket,
     expected_result_count,
-    expected_first_price, expected_last_price,
-    expected_first_duration, expected_last_duration,
+    expected_first_price,
+    expected_last_price,
+    expected_first_duration,
+    expected_last_duration,
 ):
     #
     # GIVEN
     #
-    flight_oracle = oracle.FlightOracle(oracle.FlightDataset(dataset_path).load())
+    query = solution.FlightQuery(
+        origin=origin,
+        destination=destination,
+        bags_count=bags,
+        return_ticket=return_ticket,
+    )
+    query.validate()
+
+    dataset = solution.FlightDataset(dataset_path).load()
+    dataset.validate(query)
+
+    flight_oracle = solution.FlightOracle(dataset)
 
     #
     # WHEN
     #
-    result: oracle.FlightSearchResult = flight_oracle.find_flights(
-        origin=origin,
-        destination=destination,
-        bags=bags,
-        return_ticket=return_ticket,
-    )
+    result: solution.FlightSearchResult = flight_oracle.find_flights(query)
 
     #
     # THEN
@@ -235,5 +241,103 @@ def test_query(
     assert expected_last_duration == result.trips[-1].travel_time
 
 
-# TODO test layover SMALLER
-# TODO test layover BIGGER
+@pytest.mark.parametrize(
+    "dataset_path,origin,destination,bags,return_ticket," "expected_result_count",
+    [
+        ("datasets/example3.csv", "WUE", "NNB", 1, False, 58),
+    ],
+)
+def test_max_stops(
+    dataset_path,
+    origin,
+    destination,
+    bags,
+    return_ticket,
+    expected_result_count,
+):
+    #
+    # GIVEN
+    #
+    max_stops = 2
+    query = solution.FlightQuery(
+        origin=origin,
+        destination=destination,
+        bags_count=bags,
+        return_ticket=return_ticket,
+        max_stops=max_stops,
+    )
+    query.validate()
+
+    dataset = solution.FlightDataset(dataset_path).load()
+    dataset.validate(query)
+
+    flight_oracle = solution.FlightOracle(dataset)
+
+    #
+    # WHEN
+    #
+    result: solution.FlightSearchResult = flight_oracle.find_flights(query)
+
+    #
+    # THEN
+    #
+    print(
+        f"\nRESULT of {origin} -> {destination} (return={return_ticket}):\n"
+        f"{result.to_json()}"
+    )
+    assert result
+    assert len(result.trips) == expected_result_count
+    # max stops
+    for t in result.trips:
+        assert len(t.flights) <= max_stops + 1
+
+
+@pytest.mark.parametrize(
+    "dataset_path,origin,destination,bags,return_ticket," "expected_result_count",
+    [
+        ("datasets/example3.csv", "WUE", "NNB", 1, False, 7),
+    ],
+)
+def test_max_price(
+    dataset_path,
+    origin,
+    destination,
+    bags,
+    return_ticket,
+    expected_result_count,
+):
+    #
+    # GIVEN
+    #
+    max_price = 75.0
+    query = solution.FlightQuery(
+        origin=origin,
+        destination=destination,
+        bags_count=bags,
+        return_ticket=return_ticket,
+        max_price=max_price,
+    )
+    query.validate()
+
+    dataset = solution.FlightDataset(dataset_path).load()
+    dataset.validate(query)
+
+    flight_oracle = solution.FlightOracle(dataset)
+
+    #
+    # WHEN
+    #
+    result: solution.FlightSearchResult = flight_oracle.find_flights(query)
+
+    #
+    # THEN
+    #
+    print(
+        f"\nRESULT of {origin} -> {destination} (return={return_ticket}):\n"
+        f"{result.to_json()}"
+    )
+    assert result
+    assert len(result.trips) == expected_result_count
+    # max price
+    for t in result.trips:
+        assert t.total_price <= max_price

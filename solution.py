@@ -2,8 +2,10 @@
 #
 # Solution of https://github.com/kiwicom/python-weekend-xmas-task
 #
-# - breath first search (sub-optimal ~ constraints to speed-up search)
-# - in-memory
+# Usage examples:
+#
+#   python3 -m solution example/example0.csv RFZ WIW --bags=1 --return
+#   python3 -m solution -h
 #
 # IMPORTANT task assignment related notes:
 #
@@ -15,6 +17,12 @@
 #   THEREFORE "there trip" arrival time MIGHT be AFTER "back trip" departure time
 #   (traveller would MISS "back trip" departure in the real world)
 #
+# Implementation notes:
+#
+# - breath first search
+# - in-memory
+#
+import argparse
 import collections
 import csv
 import datetime
@@ -22,6 +30,87 @@ import json
 import os
 from typing import Dict
 from typing import List
+from typing import Optional
+
+
+class FlightQuery:
+    def __init__(
+        self,
+        origin: str = "",
+        destination: str = "",
+        bags_count: int = 0,
+        return_ticket: bool = False,
+        min_layover_hours: int = 1,
+        max_layover_hours: int = 6,
+        max_stops: int = 0,
+        max_price: float = 0.0,
+    ):
+        self.origin = origin
+        self.destination = destination
+        self.bags_count = bags_count
+        self.return_ticket = return_ticket
+        # constraints
+        self.min_layover_hours = min_layover_hours
+        self.max_layover_hours = max_layover_hours
+        # extra
+        self.max_stops = max_stops
+        self.max_price = max_price
+
+    def __str__(self) -> str:
+        return (
+            f"Query:\n"
+            f"  origin     : {self.origin}\n"
+            f"  destination: {self.destination}\n"
+            f"  bags count : {self.bags_count}\n"
+            f"  return     : {self.return_ticket}\n"
+            f"  ------------\n"
+            f"  max stops  : {self.max_stops}\n"
+            f"  max price  : {self.max_price}\n"
+        )
+
+    def init(self, cli_args: Optional[argparse.Namespace] = None) -> "FlightQuery":
+        if cli_args:
+            self.origin = cli_args.origin
+            self.destination = cli_args.destination
+            self.bags_count = cli_args.bags
+            self.return_ticket = getattr(cli_args, "return")
+        return self
+
+    def validate(self):
+        if not self.origin:
+            raise ValueError("Origin airport must be specified - it is empty.")
+        if not self.destination:
+            raise ValueError("Destination airport must be specified - it is empty.")
+        if self.origin == self.destination:
+            raise ValueError(
+                f"Origin airport {self.origin} must be different from destination "
+                f"airport"
+            )
+        if self.bags_count < 0:
+            raise ValueError(
+                f"Number of bags must be positive number: {self.bags_count}"
+            )
+        if self.max_stops < 0:
+            raise ValueError(
+                f"Maximum number of stops must be positive number: {self.max_stops}"
+            )
+        if self.max_price < 0.0:
+            raise ValueError(f"Maximum price must be positive number: {self.max_price}")
+        if self.min_layover_hours < 0:
+            raise ValueError(
+                f"Minimum layover time must be positive number: "
+                f"{self.min_layover_hours}"
+            )
+        if self.max_layover_hours < 0:
+            raise ValueError(
+                f"Maximum layover time must be positive number: "
+                f"{self.max_layover_hours}"
+            )
+        if self.min_layover_hours > self.max_layover_hours:
+            raise ValueError(
+                f"Minimum layover ({self.min_layover_hours}h) must be smaller than "
+                f"maximum layover ({self.max_layover_hours}h)"
+            )
 
 
 class FlightDataset:
@@ -50,7 +139,7 @@ class FlightDataset:
         Parameters
         ----------
         dataset_path : str
-          Filesystem (relative or absolute) path to dataset.
+          Filesystem (relative or absolute) path to CSV file with dataset.
 
         """
         self._dataset_path = dataset_path
@@ -85,7 +174,9 @@ class FlightDataset:
 
     def load(self) -> "FlightDataset":
         if not os.path.isfile(self._dataset_path):
-            raise ValueError(f"Invalid input dataset path: '{self._dataset_path}'")
+            raise FileNotFoundError(
+                f"Invalid input dataset path: '{self._dataset_path}'"
+            )
 
         with open(self._dataset_path, mode="r") as csv_file:
             csv_reader = csv.DictReader(csv_file)
@@ -94,11 +185,15 @@ class FlightDataset:
 
         return self
 
-    def is_origin_valid(self, origin: str) -> bool:
-        return origin in self.srcs
+    def validate(self, query: FlightQuery) -> "FlightDataset":
+        if query.origin not in self.srcs:
+            raise ValueError(f"Origin airport '{query.origin}' is invalid (unknown)")
+        if query.destination not in self.dsts:
+            raise ValueError(
+                f"Destination airport '{query.destination}' is invalid (unknown)"
+            )
 
-    def is_destination_valid(self, destination: str) -> bool:
-        return destination in self.dsts
+        return self
 
 
 class Trip:
@@ -190,8 +285,6 @@ class Trip:
 
 
 class FlightSearchResult:
-    """Result of the flight search."""
-
     def __init__(self):
         self.trips: List[Trip] = []
 
@@ -249,57 +342,6 @@ class FlightOracle:
     def __init__(self, dataset: FlightDataset):
         self.dataset: FlightDataset = dataset
 
-    def _validate_query(
-        self,
-        origin: str,
-        destination: str,
-        bags: int = 0,
-        # constraints
-        min_layover_hours: int = 1,
-        max_layover_hours: int = 6,
-        # extra
-        max_stops: int = 0,
-        max_price: float = 0.0,
-    ):
-        if not origin:
-            raise ValueError("Origin airport must be specified - it is empty.")
-        else:
-            if origin not in self.dataset.srcs:
-                raise ValueError("Origin airport '{origin}' is invalid (unknown)")
-        if not destination:
-            raise ValueError("Destination airport must be specified - it is empty.")
-        else:
-            if destination not in self.dataset.dsts:
-                raise ValueError(
-                    f"Destination airport '{destination}' is invalid (unknown)"
-                )
-        if origin == destination:
-            raise ValueError(
-                f"Origin airport {origin} must be different from destination "
-                f"airport"
-            )
-        if bags < 0:
-            raise ValueError(f"Number of bags must be positive number: {bags}")
-        if max_stops < 0:
-            raise ValueError(
-                f"Maximum number of stops must be positive number: {max_stops}"
-            )
-        if max_price < 0.0:
-            raise ValueError(f"Maximum price must be positive number: {max_price}")
-        if min_layover_hours < 0:
-            raise ValueError(
-                f"Minimum layover time must be positive number: {min_layover_hours}"
-            )
-        if max_layover_hours < 0:
-            raise ValueError(
-                f"Maximum layover time must be positive number: {max_layover_hours}"
-            )
-        if min_layover_hours > max_layover_hours:
-            raise ValueError(
-                f"Minimum layover ({min_layover_hours}h) must be smaller than "
-                f"maximum layover ({max_layover_hours}h)"
-            )
-
     @staticmethod
     def _is_flight_admissible(
         flight,
@@ -334,30 +376,25 @@ class FlightOracle:
         ):
             return False
         # max stops
-        if max_stops and max_stops < len(trip.stops) + 1:
+        if max_stops and max_stops < len(trip.stops) - 1:
             return False
 
         return True
 
-    def _find_one_way_flights(
-        self,
-        origin: str,
-        destination: str,
-        bags: int = 0,
-        # constraints
-        min_layover_hours: int = 1,
-        max_layover_hours: int = 6,
-        # extra
-        max_stops: int = 0,
-        max_price: float = 0.0,
-    ) -> FlightSearchResult:
+    def _find_one_way_flights(self, query: FlightQuery) -> FlightSearchResult:
         result = FlightSearchResult()
         trips = collections.deque()
-        trips.append(Trip(origin=origin, destination=destination, bags_count=bags))
+        trips.append(
+            Trip(
+                origin=query.origin,
+                destination=query.destination,
+                bags_count=query.bags_count,
+            )
+        )
         while trips:
             trip: Trip = trips.popleft()
             current_stop = trip.stops[-1]
-            if destination == current_stop:
+            if query.destination == current_stop:
                 result.add_trip(trip)
 
             # schedule next stops from the current stop
@@ -365,10 +402,10 @@ class FlightOracle:
                 if FlightOracle._is_flight_admissible(
                     flight=flight,
                     trip=trip,
-                    min_layover_hours=min_layover_hours,
-                    max_layover_hours=max_layover_hours,
-                    max_price=max_price,
-                    max_stops=max_stops,
+                    min_layover_hours=query.min_layover_hours,
+                    max_layover_hours=query.max_layover_hours,
+                    max_price=query.max_price,
+                    max_stops=query.max_stops,
                 ):
                     new_trip: Trip = trip.copy()
                     new_trip.add_stop(flight)
@@ -376,80 +413,68 @@ class FlightOracle:
 
         return result
 
-    def find_flights(
-        self,
-        origin: str,
-        destination: str,
-        bags: int = 0,
-        return_ticket: bool = False,
-        # constraints
-        min_layover_hours: int = 1,
-        max_layover_hours: int = 6,
-        # extra
-        max_stops: int = 0,
-        max_price: float = 0.0,
-    ) -> FlightSearchResult:
-        self._validate_query(
-            origin=origin,
-            destination=destination,
-            bags=bags,
-            min_layover_hours=min_layover_hours,
-            max_layover_hours=max_layover_hours,
-            max_stops=max_stops,
-            max_price=max_price,
-        )
-
-        there: FlightSearchResult = self._find_one_way_flights(
-            origin=origin,
-            destination=destination,
-            bags=bags,
-            min_layover_hours=min_layover_hours,
-            max_layover_hours=max_layover_hours,
-            max_stops=max_stops,
-            max_price=max_price,
-        )
-        if return_ticket and there.trips:
+    def find_flights(self, query: FlightQuery) -> FlightSearchResult:
+        there: FlightSearchResult = self._find_one_way_flights(query)
+        if query.return_ticket and there.trips:
             # IMPORTANT: no layover + "there" arrival might be AFTER "back" departure
-            back: FlightSearchResult = self._find_one_way_flights(
-                origin=destination,
-                destination=origin,
-                bags=bags,
-                min_layover_hours=min_layover_hours,
-                max_layover_hours=max_layover_hours,
-                max_stops=max_stops,
-                max_price=max_price,
-            )
+            back: FlightSearchResult = self._find_one_way_flights(query)
             there.add_back_result(back)
 
         there.sort()
         return there
 
 
-# TODO class FlightQuery: from CLI, validate() method, used in parameters
+def main() -> FlightSearchResult:
+    parser = argparse.ArgumentParser(
+        description="Flights finder (Kiwi.com Python weekend entry task)."
+    )
+    parser.add_argument(
+        "dataset_path",
+        metavar="dataset_path",
+        type=str,
+        help="path to CSV file with flights",
+    )
+    parser.add_argument("origin", metavar="origin", type=str, help="flight trip origin")
+    parser.add_argument(
+        "destination", metavar="destination", type=str, help="flight trip destination"
+    )
+    parser.add_argument(
+        "--bags",
+        type=int,
+        default=0,
+        help="optional number of bags (default: 0)",
+    )
+    parser.add_argument(
+        "--return",
+        action="store_false",
+        default=False,
+        help="optional one way vs. return trip (default: one way)",
+    )
+    parser.add_argument(
+        "--max_stops",
+        type=int,
+        default=0,
+        help="optional maximum number of stops (one way)",
+    )
+    parser.add_argument(
+        "--max_price",
+        type=int,
+        default=0,
+        help="optional maximum flight trip price",
+    )
+    args = parser.parse_args()
 
-import getopt, sys
+    query = FlightQuery().init(args)
+    query.validate()
 
-def main():
-    try:
-        opts, args = getopt.getopt(sys.argv[1:], "ho:v", ["help", "output="])
-    except getopt.GetoptError as err:
-        # print help information and exit:
-        print(err)  # will print something like "option -a not recognized"
-        usage()
-        sys.exit(2)
-    output = None
-    verbose = False
-    for o, a in opts:
-        if o == "-v":
-            verbose = True
-        elif o in ("-h", "--help"):
-            usage()
-            sys.exit()
-        elif o in ("-o", "--output"):
-            output = a
-        else:
-            assert False, "unhandled option"
-    # ...
+    dataset = FlightDataset(args.dataset_path).load()
+    dataset.validate(query)
+
+    flight_oracle = FlightOracle(dataset)
+    result: FlightSearchResult = flight_oracle.find_flights(query)
+    print(result.to_json())
+    return result
+
 
 if __name__ == "__main__":
-    main()
+    print(main().to_json())
