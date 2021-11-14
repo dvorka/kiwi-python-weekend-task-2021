@@ -26,4 +26,4 @@ test:
 
 example:
 	# python -m solution -h
-	python -m solution example/example0.csv RFZ WIW --bags=1 --return
+	python -m solution datasets/example0.csv RFZ WIW --bags=1 --return

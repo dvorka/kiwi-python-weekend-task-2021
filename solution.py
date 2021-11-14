@@ -1,4 +1,14 @@
 # Kiwi.com Python weekend task '21: Martin Dvorak <martin.dvorak@mindforger.com>
+import argparse
+import collections
+import csv
+import datetime
+import json
+import os
+from typing import Dict
+from typing import List
+from typing import Optional
+
 #
 # Solution of https://github.com/kiwicom/python-weekend-xmas-task
 #
@@ -9,28 +19,21 @@
 #
 # IMPORTANT task assignment related notes:
 #
-# - travel_time LONGER than 1 day is serialized using timedelta format,
-#   for instance "1 day, 19:50:00"
 # - RETURN trips: task assignment explicitly states that
 #   LAYOVER constraint (1h - 6h) MUST NOT be used between "there trip"
 #   (arrival stop) and "back trip" (departure stop),
 #   THEREFORE "there trip" arrival time MIGHT be AFTER "back trip" departure time
 #   (traveller would MISS "back trip" departure in the real world)
+#   - set option below to True to ensure "there trip" arrival < "back trip" departure
+OPT_TIME_ORDERED_RETURN_TRIP = False
+# - travel_time LONGER than 1 day is serialized using timedelta format,
+#   for instance "1 day, 19:50:00"
 #
 # Implementation notes:
 #
 # - breath first search
 # - in-memory
 #
-import argparse
-import collections
-import csv
-import datetime
-import json
-import os
-from typing import Dict
-from typing import List
-from typing import Optional
 
 
 class FlightQuery:
@@ -309,6 +312,13 @@ class FlightSearchResult:
             new_trips: List[Trip] = []
             for there_trip in self.trips:
                 for back_trip in back.trips:
+                    if (
+                        OPT_TIME_ORDERED_RETURN_TRIP
+                        and there_trip.flights[-1][FlightDataset.COL_ARRIVAL_O]
+                        >= back_trip.flights[-1][FlightDataset.COL_DEPARTURE_O]
+                    ):
+                        continue
+
                     new_trip = there_trip.copy()
 
                     new_trip.flights.extend(back_trip.flights)
@@ -446,7 +456,7 @@ def main() -> FlightSearchResult:
     )
     parser.add_argument(
         "--return",
-        action="store_false",
+        action="store_true",
         default=False,
         help="optional one way vs. return trip (default: one way)",
     )
