@@ -76,6 +76,8 @@ class FlightQuery:
             self.origin = cli_args.origin
             self.destination = cli_args.destination
             self.bags_count = cli_args.bags
+            self.max_stops = cli_args.max_stops
+            self.max_price = cli_args.max_price
             self.return_ticket = getattr(cli_args, "return")
         return self
 

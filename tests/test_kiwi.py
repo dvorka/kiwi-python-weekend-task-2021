@@ -293,7 +293,7 @@ def test_max_stops(
 
 
 @pytest.mark.parametrize(
-    "dataset_path,origin,destination,bags,return_ticket," "expected_result_count",
+    "dataset_path,origin,destination,bags,return_ticket,expected_result_count",
     [
         ("datasets/example3.csv", "WUE", "NNB", 1, False, 7),
     ],
