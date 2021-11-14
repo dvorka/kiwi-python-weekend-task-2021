@@ -12,6 +12,7 @@ Development resources:
     - directory with CSV datasets used by tests
 * `Makefile`
     - used in solution development - check `make help`
+
 # Solution
 Requirements:
 
@@ -46,6 +47,7 @@ Examples:
 * `python -m solution datasets/example3.csv VVH ZRW --bags=2 --max_stops 2`
 * `python -m solution datasets/example3.csv WUE NNB --bags=1 --max_price 75`
 * `python -m solution -h`
+
 # Implementation
 **Important** task assignment and implementation related notes:
 
@@ -69,5 +71,6 @@ Examples:
     - flights are searched using BFS algorithm
 - in-memory
     - implementation is in-memory only - it won't be scale/handle big(ger) datasets
+
 # Contact
 * Martin Dvorak [martin.dvorak@mindforger.com](martin.dvorak@mindforger.com)
